@@ -1,0 +1,8 @@
+pandas
+selenium
+webdriver-manager
+beautifulsoup4
+streamlit
+scikit-learn
+mlxtend
+matplotlib

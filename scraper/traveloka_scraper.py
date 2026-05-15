@@ -13,7 +13,7 @@ from selenium.webdriver.support import expected_conditions as EC
 from webdriver_manager.chrome import ChromeDriverManager
 
 from selenium.webdriver.common.action_chains import ActionChains
-
+import undetected_chromedriver as uc
 
 # ==========================================
 # HÀM RANDOM DELAY
@@ -47,25 +47,25 @@ def safe_get_text(by, selector):
 # CHROME OPTIONS
 # ==========================================
 
-options = webdriver.ChromeOptions()
+options = uc.ChromeOptions()
 
 options.add_argument("--start-maximized")
 
 # né detect bot
 options.add_argument("--disable-blink-features=AutomationControlled")
 
-options.add_experimental_option(
-    "excludeSwitches",
-    ["enable-automation"]
-)
+# options.add_experimental_option(
+#     "excludeSwitches",
+#     ["enable-automation"]
+# )
 
-options.add_experimental_option(
-    "useAutomationExtension",
-    False
-)
+# options.add_experimental_option(
+#     "useAutomationExtension",
+#     False
+# )
 
 options.add_argument(
-    "user-agent=Mozilla/5.0 "
+    "--user-agent=Mozilla/5.0 "
     "(Windows NT 10.0; Win64; x64) "
     "AppleWebKit/537.36 "
     "(KHTML, like Gecko) "
@@ -76,11 +76,9 @@ options.add_argument(
 # DRIVER
 # ==========================================
 
-driver = webdriver.Chrome(
-    service=Service(
-        ChromeDriverManager().install()
-    ),
-    options=options
+driver = uc.Chrome(
+    options=options,
+    use_subprocess=True
 )
 
 driver.execute_script("""
@@ -103,8 +101,7 @@ all_data = []
 # PAGE LOOP
 # ==========================================
 
-for page in range(1, 2):
-
+for page in range(2, 6):
     # ==========================================
     # URL
     # ==========================================
@@ -129,7 +126,7 @@ for page in range(1, 2):
 
     driver.get(url)
 
-    human_delay(5, 8)
+    human_delay(8, 15)
 
     # ==========================================
     # SCROLL RANDOM
@@ -147,14 +144,30 @@ for page in range(1, 2):
     # LẤY HOTEL CARDS
     # ==========================================
 
-    hotel_cards = wait.until(
-        EC.presence_of_all_elements_located(
-            (
-                By.CSS_SELECTOR,
-                "h3[data-testid='popular-hotel-card-name']"
+    # hotel_cards = wait.until(
+    #     EC.presence_of_all_elements_located(
+    #         (
+    #             By.CSS_SELECTOR,
+    #             "h3[data-testid='popular-hotel-card-name']"
+    #         )
+    #     )
+    # )
+    try:
+
+        hotel_cards = wait.until(
+            EC.presence_of_all_elements_located(
+                (
+                    By.CSS_SELECTOR,
+                    "h3[data-testid='popular-hotel-card-name']"
+                )
             )
         )
-    )
+
+    except:
+
+        print(f"Page {page} load lỗi")
+
+        continue
 
     print(f"Tìm thấy {len(hotel_cards)} khách sạn")
 
@@ -162,7 +175,7 @@ for page in range(1, 2):
     # LOOP HOTEL
     # ==========================================
 
-    for index in range(len(hotel_cards)):
+    for index in range(min(len(hotel_cards),20)):
 
         try:
 
@@ -195,15 +208,46 @@ for page in range(1, 2):
             hotel_name = card.text.strip()
 
             print(f"\nĐang lấy: {hotel_name}")
-
-            # click
+            # scroll nhẹ giống người thật
             driver.execute_script(
-                "arguments[0].click();",
-                card
+                f"window.scrollBy(0, {random.randint(100, 300)});"
             )
 
-            human_delay(5, 8)
+            human_delay(1, 3)
 
+            # # click
+            # actions.move_to_element(card).pause(
+            #     random.uniform(1, 2)
+            # ).click().perform()
+            # click giống người thật
+
+            # try:
+
+            #     card.click()
+
+            # except:
+
+            #     driver.execute_script(
+            #         "arguments[0].click();",
+            #         card
+            #     )
+            # human_delay(5, 8)
+            # driver.execute_script(
+            #     f"window.scrollBy(0, {random.randint(200, 600)});"
+            # )
+            hotel_link = card.find_element(
+                By.XPATH,
+                "./ancestor::a"
+            ).get_attribute("href")
+
+            driver.execute_script(
+                "window.open(arguments[0]);",
+                hotel_link
+            )
+
+            driver.switch_to.window(driver.window_handles[-1])
+
+            human_delay(2, 4)
             # ==========================================
             # URL
             # ==========================================
@@ -533,61 +577,128 @@ for page in range(1, 2):
             # ==========================================
             # BACK
             # ==========================================
-
             driver.back()
 
-            human_delay(5, 8)
+            wait.until(
+                EC.presence_of_all_elements_located(
+                    (
+                        By.CSS_SELECTOR,
+                        "h3[data-testid='popular-hotel-card-name']"
+                    )
+                )
+            )
+
+            human_delay(3, 5)
+            # driver.back()
+
+            # human_delay(5, 8)
 
         except Exception as e:
 
-            print("Lỗi:", e)
+            #print("Lỗi:", e)
+            print("Lỗi chi tiết:")
+            print(repr(e))
 
             try:
 
                 driver.back()
 
-                human_delay(5, 8)
+                human_delay(8, 15)
 
             except:
                 pass
+        # ==========================================
+    # SAVE SAU MỖI PAGE
+    # ==========================================
 
+    new_df = pd.DataFrame(all_data)
+
+    output_file = "traveloka_hotels_full.xlsx"
+
+    try:
+
+        old_df = pd.read_excel(output_file)
+
+        final_df = pd.concat(
+            [old_df, new_df],
+            ignore_index=True
+        )
+
+    except:
+
+        final_df = new_df
+
+    # xóa trùng
+    final_df = final_df.drop_duplicates(
+        subset=["hotel_url"]
+    )
+
+    final_df.to_excel(
+        output_file,
+        index=False
+    )
+
+    print(f"\nĐã lưu xong PAGE {page}")
+    print(f"Tổng dữ liệu hiện tại: {len(final_df)}")
+
+    # reset để qua page mới
+    all_data = []
+    time.sleep(random.uniform(20, 40))        
+
+# # ==========================================
+# # DATAFRAME
+# # ==========================================
+
+# df = pd.DataFrame(all_data)
+
+# # ==========================================
+# # XÓA TRÙNG
+# # ==========================================
+
+# df = df.drop_duplicates()
+
+# # ==========================================
+# # SAVE EXCEL
+# # ==========================================
+
+# output_file = "traveloka_hotels_full.xlsx"
+
+# df.to_excel(
+#     output_file,
+#     index=False
+# )
+
+# # ==========================================
+# # RESULT
+# # ==========================================
+
+# print("\n===== KẾT QUẢ =====")
+
+# print(df.head())
+
+# print(f"\nTổng số khách sạn: {len(df)}")
+
+# print(f"\nĐã lưu file: {output_file}")
+
+# # ==========================================
+# # CLOSE
+# # ==========================================
+
+# driver.quit()
 # ==========================================
-# DATAFRAME
+# SAVE SAU MỖI PAGE
 # ==========================================
 
-df = pd.DataFrame(all_data)
+# df = pd.DataFrame(all_data)
 
-# ==========================================
-# XÓA TRÙNG
-# ==========================================
+# # xóa trùng theo url
+# df = df.drop_duplicates(subset=["hotel_url"])
 
-df = df.drop_duplicates()
+# output_file = "traveloka_hotels_full.xlsx"
 
-# ==========================================
-# SAVE EXCEL
-# ==========================================
+# df.to_excel(
+#     output_file,
+#     index=False
+# )
 
-output_file = "traveloka_hotels_full.xlsx"
-
-df.to_excel(
-    output_file,
-    index=False
-)
-
-# ==========================================
-# RESULT
-# ==========================================
-
-print("\n===== KẾT QUẢ =====")
-
-print(df.head())
-
-print(f"\nTổng số khách sạn: {len(df)}")
-
-print(f"\nĐã lưu file: {output_file}")
-
-# ==========================================
-# CLOSE
-# ==========================================
-
-driver.quit()
+# print(f"\nĐã lưu page {page}")
